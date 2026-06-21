@@ -2,11 +2,21 @@
 
 **正本:** [OND800/docs/interface_spec.md](https://github.com/saitoomituru/OND800/blob/main/docs/interface_spec.md)
 
+**参照している正本版:** Season 3 v2.1
+
 変更はOND800リポジトリ側が行う。このファイルはSAO800実装者向けの参照索引。
 
 ---
 
 ## SAO800が実装すべきインターフェース
+
+## 経路の区別
+
+- **現在の実装経路:** IPカメラのRTSPをSAO800が直接受信し、GStreamer appsinkからOBSへ渡す。
+- **OND800との正規映像経路:** OND800が公開するNDIをOBS/SAO800側で受ける。将来実装。
+- **制御経路:** OND800からのスロット番号契約は正本に未定義のため、現時点では実装しない。
+
+現在のRTSPソースは単独で価値を持つ先行実装であり、NDI契約の代用品として扱わない。
 
 ### NDI映像受信（OND800 → SAO800）
 
