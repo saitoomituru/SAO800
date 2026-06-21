@@ -105,14 +105,18 @@ void RtspSource::start_pipeline()
     if (m_url.empty()) return;
     blog(LOG_INFO, "[SAO800] start_pipeline() url='%s'", m_url.c_str());
 
+    // gst_parse_launchの構文としてURLを解釈させないよう、GLibの規則で引用する。
+    // 認証情報に空白や引用符が含まれてもパイプライン要素を注入させない。
+    gchar *quoted_url = g_shell_quote(m_url.c_str());
     std::string pipeline_str =
-        "rtspsrc location=" + m_url + " latency=0 protocols=tcp ! "
+        "rtspsrc location=" + std::string(quoted_url) + " latency=0 protocols=tcp ! "
         "rtph264depay ! "
         "h264parse ! "
         "avdec_h264 ! "
         "videoconvert ! "
         "video/x-raw,format=NV12 ! "
         "appsink name=sink emit-signals=true sync=false max-buffers=2 drop=true";
+    g_free(quoted_url);
 
     blog(LOG_INFO, "[SAO800] pipeline: %s", pipeline_str.c_str());
     GError *err = nullptr;
@@ -120,6 +124,10 @@ void RtspSource::start_pipeline()
     if (err) {
         blog(LOG_ERROR, "[SAO800] gst_parse_launch failed: %s", err->message);
         g_error_free(err);
+        if (m_pipeline) {
+            gst_object_unref(m_pipeline);
+            m_pipeline = nullptr;
+        }
         return;
     }
     if (!m_pipeline) {
@@ -129,19 +137,29 @@ void RtspSource::start_pipeline()
     blog(LOG_INFO, "[SAO800] pipeline created, setting to PLAYING");
 
     m_appsink = gst_bin_get_by_name(GST_BIN(m_pipeline), "sink");
+    if (!m_appsink) {
+        blog(LOG_ERROR, "[SAO800] appsink 'sink' not found");
+        gst_object_unref(m_pipeline);
+        m_pipeline = nullptr;
+        return;
+    }
     GstAppSinkCallbacks cbs = {};
     cbs.new_sample = RtspSource::on_new_sample;
     gst_app_sink_set_callbacks(GST_APP_SINK(m_appsink), &cbs, this, nullptr);
 
     // バスでエラー・EOSを監視
     GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(m_pipeline));
-    gst_bus_add_watch(bus, RtspSource::on_bus_message, this);
+    m_bus_watch_id = gst_bus_add_watch(bus, RtspSource::on_bus_message, this);
     gst_object_unref(bus);
 
     m_loop    = g_main_loop_new(nullptr, FALSE);
     m_running = true;
 
-    gst_element_set_state(m_pipeline, GST_STATE_PLAYING);
+    if (gst_element_set_state(m_pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+        blog(LOG_ERROR, "[SAO800] failed to set pipeline to PLAYING");
+        stop_pipeline();
+        return;
+    }
 
     m_gst_thread = std::thread([this] {
         g_main_loop_run(m_loop);
@@ -154,13 +172,19 @@ void RtspSource::stop_pipeline()
     m_running = false;
 
     gst_element_set_state(m_pipeline, GST_STATE_NULL);
+    if (m_bus_watch_id != 0) {
+        g_source_remove(m_bus_watch_id);
+        m_bus_watch_id = 0;
+    }
     if (m_loop) {
         g_main_loop_quit(m_loop);
-        g_main_loop_unref(m_loop);
-        m_loop = nullptr;
     }
     if (m_gst_thread.joinable())
         m_gst_thread.join();
+    if (m_loop) {
+        g_main_loop_unref(m_loop);
+        m_loop = nullptr;
+    }
 
     if (m_appsink) {
         gst_object_unref(m_appsink);

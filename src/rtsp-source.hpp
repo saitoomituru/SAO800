@@ -37,6 +37,7 @@ private:
     GstElement   *m_pipeline = nullptr;
     GstElement   *m_appsink  = nullptr;
     GMainLoop    *m_loop     = nullptr;
+    guint         m_bus_watch_id = 0;
     std::thread   m_gst_thread;
     std::atomic<bool> m_running{false};
 

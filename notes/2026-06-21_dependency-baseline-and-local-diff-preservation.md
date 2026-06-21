@@ -41,3 +41,17 @@
 - 映像表示とNV12色・stride
 - RTSP切断・再接続時の終了処理
 - `vtdec_hw` caps negotiationの再現と回避策
+
+## 本セッションでの安定化変更
+
+- RTSP URLを`g_shell_quote`で引用し、`gst_parse_launch`構文への混入を防いだ。
+- parse失敗時に部分生成されたpipelineを解放するようにした。
+- appsink取得失敗とPLAYING遷移失敗を明示的に処理するようにした。
+- bus watch IDを保持し、停止時に解除してからmain loop/threadを終了するようにした。
+- これらはビルド対象だが、OBS実機での映像確認は上記TODOのまま。
+
+## 検証結果
+
+- `./build.sh`: 成功（CMake configure / C++ compile / bundle link完了）
+- sandbox内の`sysctl`に権限制限警告が出たが、ビルド結果には影響しなかった。
+- OBSへの再インストール・再起動・実映像確認はまだ行っていない。
