@@ -50,6 +50,7 @@ target_link_libraries(sao800 PRIVATE
 
 target_link_options(sao800 PRIVATE
   "-F/Applications/OBS.app/Contents/Frameworks"
+  "-Wl,-rpath,/Applications/OBS.app/Contents/Frameworks"
 )
 
 target_compile_options(sao800 PRIVATE ${GST_CFLAGS_OTHER})
